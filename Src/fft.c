@@ -61,7 +61,10 @@ void ft_start_sampling(enum DD_PINS_E leftSensor)
     HAL_TIM_Base_Start_IT(&htim6);
 }
 
-
+void ft_stop_sampling()
+{
+    HAL_TIM_Base_Stop_IT(&htim6);
+}
 
 bool ft_is_sampling_finished(void)
 {

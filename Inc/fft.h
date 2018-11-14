@@ -64,6 +64,7 @@ void ft_init(void);
  */
 void ft_start_sampling(enum DD_PINS_E pin_no);
 
+void ft_stop_sampling();
 
 /**
  * Set a handler function called after finishing sampling.
