@@ -9,6 +9,7 @@
 #include "fft.h"
 #include "motor.h"
 #include "Movement.h"
+#include "ObstacleSensor.H"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -18,8 +19,8 @@
 osThreadId defaultTaskHandle;
 int8_t mov_velocity = 0;
 enum RobotMovement robotMovDirection = Mov_Stop;
-uint8_t leftBumper = 0;
-uint8_t rightBumper = 0;
+Bumpers bumperSensors;
+DistanceSensor distanceSensors;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
@@ -47,217 +48,213 @@ static void DefaultIdle(void const * argument);
  *
  * @retval None
  */
-int main(void) {
-	/* USER CODE BEGIN 1 */
+int main(void)
+{
+    /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+    /* USER CODE END 1 */
 
-	/* MCU Configuration----------------------------------------------------------*/
+    /* MCU Configuration----------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 
-	dorobo_init();
-	wifi_init();
-	adc_init();
+    dorobo_init();
+    wifi_init();
+    adc_init();
 
-	motor_init();
+    motor_init();
 
-	digital_configure_pin(DD_PIN_PD14, DD_CFG_INPUT_NOPULL);
-	digital_configure_pin(DD_PIN_PC8, DD_CFG_INPUT_NOPULL);
+    SetUpSensors();
 
-	digital_configure_pin(DD_PIN_PC13, DD_CFG_INPUT_PULLUP);
-	digital_configure_pin(DD_PIN_PA8, DD_CFG_INPUT_PULLUP);
+    // Digital pins for target sensors
+    digital_configure_pin(DD_PIN_PD14, DD_CFG_INPUT_NOPULL);
 
-	ft_start_sampling(DD_PIN_PD14);
+    digital_configure_pin(DD_PIN_PC8, DD_CFG_INPUT_NOPULL);
 
-	//Here HIGH actually means low...
-	led_red(DD_LEVEL_HIGH);
-	led_green(DD_LEVEL_HIGH);
+    ft_start_sampling(DD_PIN_PD14);
 
-	/* USER CODE BEGIN Init */
+    //Here HIGH actually means low...
+    led_red(DD_LEVEL_HIGH);
+    led_green(DD_LEVEL_HIGH);
 
-	/* USER CODE END Init */
+    /* USER CODE BEGIN Init */
 
-	/* USER CODE BEGIN 2 */
+    /* USER CODE END Init */
 
-	/* USER CODE END 2 */
+    /* USER CODE BEGIN 2 */
 
-	/* USER CODE BEGIN RTOS_MUTEX */
-	/* add mutexes, ... */
-	/* USER CODE END RTOS_MUTEX */
+    /* USER CODE END 2 */
 
-	/* USER CODE BEGIN RTOS_SEMAPHORES */
-	/* add semaphores, ... */
-	/* USER CODE END RTOS_SEMAPHORES */
+    /* USER CODE BEGIN RTOS_MUTEX */
+    /* add mutexes, ... */
+    /* USER CODE END RTOS_MUTEX */
 
-	/* USER CODE BEGIN RTOS_TIMERS */
-	/* start timers, add new ones, ... */
-	/* USER CODE END RTOS_TIMERS */
+    /* USER CODE BEGIN RTOS_SEMAPHORES */
+    /* add semaphores, ... */
+    /* USER CODE END RTOS_SEMAPHORES */
 
-	/* Create the thread(s) */
-	/* definition and creation of defaultTask */
+    /* USER CODE BEGIN RTOS_TIMERS */
+    /* start timers, add new ones, ... */
+    /* USER CODE END RTOS_TIMERS */
 
-	xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
-	xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128,
-	NULL, 2, NULL);
-	xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1,
-	 NULL);
-	xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4,
-	NULL);
-	// xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
+    /* Create the thread(s) */
+    /* definition and creation of defaultTask */
 
-	//osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-	//defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
+    xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 2, NULL);
+    xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
+    xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
+    // xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
 
-	/* USER CODE BEGIN RTOS_THREADS */
-	/* add threads, ... */
-	/* USER CODE END RTOS_THREADS */
 
-	/* USER CODE BEGIN RTOS_QUEUES */
-	/* add queues, ... */
-	/* USER CODE END RTOS_QUEUES */
+    //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-	/* Start scheduler */
-	//osKernelStart();
-	vTaskStartScheduler();
+    /* USER CODE BEGIN RTOS_THREADS */
+    /* add threads, ... */
+    /* USER CODE END RTOS_THREADS */
 
-	/* We should never get here as control is now taken by the scheduler */
+    /* USER CODE BEGIN RTOS_QUEUES */
+    /* add queues, ... */
+    /* USER CODE END RTOS_QUEUES */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+    /* Start scheduler */
+    //osKernelStart();
+    vTaskStartScheduler();
 
-	/* USER CODE END 3 */
+    /* We should never get here as control is now taken by the scheduler */
+
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+
+    /* USER CODE END 3 */
 
 }
 
 /* StartDefaultTask function */
-static void Behaviour(void const * argument) {
+static void Behaviour(void const * argument)
+{
 
-	/* USER CODE BEGIN 5 */
+    /* USER CODE BEGIN 5 */
 
-	/* Infinite loop */
-	for (;;) {
-		//sensorValue = adc_get_value(DA_ADC_CHANNEL0);
-		//led_green_toggle();
-		//traces("toogle led\r\n");   //print debug message
-		//sensorValue = adc_get_value(DA_ADC_CHANNEL0);
-		tracef("Behaviour \r\n");
-		vTaskDelay(20);       //delay the task for 20 ticks (1 ticks = 50 ms)
-	}
-	/* USER CODE END 5 */
+    /* Infinite loop */
+    for (;;)
+    {
+        //sensorValue = adc_get_value(DA_ADC_CHANNEL0);
+        //led_green_toggle();
+        //traces("toogle led\r\n");   //print debug message
+        //sensorValue = adc_get_value(DA_ADC_CHANNEL0);
+        tracef("Behaviour \r\n");
+        vTaskDelay(20);       //delay the task for 20 ticks (1 ticks = 50 ms)
+    }
+    /* USER CODE END 5 */
 }
 
 /// -30,30,0 goes in straight line but third wheel lags. When third wheel is
 /// not zero it'll just take a turn.
 ///
 /// @param argument
-static void MotorControl(void const * argument) {
-	while (1) {
+static void MotorControl(void const * argument)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 250 / portTICK_PERIOD_MS;
 
-		switch (robotMovDirection) {
-		case Mov_Straight:
-			mov_velocity = MoveStraight(mov_velocity);
-			break;
-		case Mov_Back:
-			mov_velocity = MoveBack(mov_velocity);
-			break;
-		case Mov_Rot_Left:
-			mov_velocity = RotateLeft(mov_velocity);
-			break;
-		case Mov_Rot_Right:
-			mov_velocity = RotateRight(mov_velocity);
-			break;
-		}
+    while (1)
+    {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-		tracef("MotorControl \r\n");
-		osDelay(250);
-	}
+        switch (robotMovDirection)
+        {
+            case Mov_Straight:
+                mov_velocity = MoveStraight(mov_velocity);
+                break;
+            case Mov_Back:
+                mov_velocity = MoveBack(mov_velocity);
+                break;
+            case Mov_Rot_Left:
+                mov_velocity = RotateLeft(mov_velocity);
+                break;
+            case Mov_Rot_Right:
+                mov_velocity = RotateRight(mov_velocity);
+                break;
+        }
+
+        tracef("MotorControl \r\n");
+        //osDelay(250);
+    }
 }
 
-static void IRSensorTest(void const * argument) {
-	uint32_t sensorValue = 0;
-	float voltageRead = 0;
+static void IRSensorTest(void const * argument)
+{
+    uint32_t sensorValue = 0;
+    float voltageRead = 0;
 
-	while (1)
-	{
-		uint8_t levelPin = 0;
-		uint8_t levelPin2 = 0;
+    while (1)
+    {
+        uint8_t levelPin = 0;
+        uint8_t levelPin2 = 0;
 
-		/* tracef(" [Target Sensor] Pin Level : %d,  PIN 2   %d\r\n", levelPin,
-		 levelPin2);*/
+        /* tracef(" [Target Sensor] Pin Level : %d,  PIN 2   %d\r\n", levelPin,
+         levelPin2);*/
 
-		if (ft_is_sampling_finished()) {
-			uint16_t freq = ft_get_transform(DFT_FREQ100);
-			for (uint8_t i = 0; i < 100; i++) {
-				levelPin += digital_get_pin(DD_PIN_PD14);
-				levelPin2 += digital_get_pin(DD_PIN_PC8);
-			}
+        if (ft_is_sampling_finished())
+        {
+            uint16_t freq = ft_get_transform(DFT_FREQ100);
+            for (uint8_t i = 0; i < 100; i++)
+            {
+                levelPin += digital_get_pin(DD_PIN_PD14);
+                levelPin2 += digital_get_pin(DD_PIN_PC8);
+            }
 
-			levelPin /= 100;
-			levelPin2 /= 100;
+            levelPin /= 100;
+            levelPin2 /= 100;
 
-			tracef(
-					" [Target Sensor] Pin Level : %d,  Freq Read: %d PIN 2   %d\r\n",
-					levelPin, freq, levelPin2);
+            tracef(" [Target Sensor] Pin Level : %d,  Freq Read: %d PIN 2   %d\r\n", levelPin, freq, levelPin2);
 
-			//TODO Filter maybe?
-			freq > 1500 ? led_red(DD_LEVEL_LOW) : led_red(DD_LEVEL_HIGH);
+            //TODO Filter maybe?
+            freq > 1500 ? led_red(DD_LEVEL_LOW) : led_red(DD_LEVEL_HIGH);
 
-			//led_red_toggle();
-			ft_start_sampling(DD_PIN_PD14);
+            //led_red_toggle();
+            ft_start_sampling(DD_PIN_PD14);
 
-		}
-		uint8_t switchLevel = digital_get_pin(DD_PIN_PD15);
+        }
+        uint8_t switchLevel = digital_get_pin(DD_PIN_PD15);
 
-		tracef(" [Switch] Switch Level : %d \r\n", switchLevel);
-		tracef("IRSensorTest \r\n");
+        tracef(" [Switch] Switch Level : %d \r\n", switchLevel);
+        tracef("IRSensorTest \r\n");
 
-		vTaskDelay(50);
-	}
+        vTaskDelay(50);
+    }
 }
 
-static void ObstacleAvoidanceSensors(void const * argument) {
+static void ObstacleAvoidanceSensors(void const * argument)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 50 / portTICK_PERIOD_MS;
 
-	uint32_t sensorValue = 0;
-	uint32_t sensorValue2 = 0;
+    while (1)
+    {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-	float voltageRead = 0;
+        bumperSensors = ReadBumperSensors();
 
-	while (1) {
+        distanceSensors = ReadDistanceSensors();
 
-		sensorValue = 0;
-		sensorValue2 = 0;
+        tracef("[Bumpers] left Bumper:  %d, right Bumper:  %d", bumperSensors.Left, bumperSensors.Right);
 
+        tracef("[DistanceSensorReading] Sensor 1 Distance:  %d Sensor Value Left RAW : %d \r\n", 0,
+                distanceSensors.LeftRawValue);
 
-		leftBumper = digital_get_pin(DD_PIN_PA8);
-
-		rightBumper = digital_get_pin(DD_PIN_PC13);
-
-		for (uint8_t i = 0; i < 10; i++) {
-			sensorValue += adc_get_value(DA_ADC_CHANNEL0);
-			sensorValue2 += adc_get_value(DA_ADC_CHANNEL2);
-		}
-
-		uint8_t distance = 1 / ((sensorValue - 472) / 19680);
-
-		tracef("[Bumpers] left Bumper:  %d, right Bumper:  %d", leftBumper,
-				rightBumper);
-
-		tracef(
-				"[DistanceSensorReading] Sensor 1 Reading:  %d Sensor Value : %d \r\n",
-				distance, sensorValue);
-
-		tracef("Sensor Value 2:  %d /r/n", sensorValue2);
-
-		vTaskDelay(150);       //delay the task for 20 ticks (1 ticks = 50 ms)
-	}
+        tracef("Sensor Value Right RAW:   %d /r/n", distanceSensors.RightRawValue);
+    }
 }
 
-static void DefaultIdle(void const * argument) {
-	while (1) {
-		tracef("DefaultIdle \r\n");
-		vTaskDelay(100);
-	}
+static void DefaultIdle(void const * argument)
+{
+    while (1)
+    {
+        tracef("DefaultIdle \r\n");
+        vTaskDelay(100);
+    }
 }
 
 /**
@@ -268,16 +265,18 @@ static void DefaultIdle(void const * argument) {
  * @param  htim : TIM handle
  * @retval None
  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	/* USER CODE BEGIN Callback 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    /* USER CODE BEGIN Callback 0 */
 
-	/* USER CODE END Callback 0 */
-	if (htim->Instance == TIM14) {
-		HAL_IncTick();
-	}
-	/* USER CODE BEGIN Callback 1 */
+    /* USER CODE END Callback 0 */
+    if (htim->Instance == TIM14)
+    {
+        HAL_IncTick();
+    }
+    /* USER CODE BEGIN Callback 1 */
 
-	/* USER CODE END Callback 1 */
+    /* USER CODE END Callback 1 */
 }
 
 /**

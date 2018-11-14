@@ -8,14 +8,49 @@
 #ifndef OBSTACLESENSOR_H_
 #define OBSTACLESENSOR_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+#include "digital.h"
+#include "adc.h"
 
-typedef struct _obstacle
+/**
+ *
+ */
+typedef struct _bumpers
 {
+    bool Left :1;
+    bool Right :1;
+} Bumpers;
+
+/**
+ *
+ */
+typedef struct _distanceSensors
+{
+    uint32_t LeftRawValue;
+    uint32_t RightRawValue;
+    uint8_t Left;
+    uint8_t Right;
+} DistanceSensor;
 
 
-}Obstacle;
+/**
+ * Configures pins for sensors
+ */
+void SetUpSensors();
+
+/**
+ * Reads the bumpers sensors
+ * @return
+ */
+Bumpers ReadBumperSensors();
 
 
+/**
+ * Obtains the distance and the raw value from the sharp sensors
+ * @return
+ */
+DistanceSensor ReadDistanceSensors();
 
 
 /**
@@ -25,10 +60,5 @@ typedef struct _obstacle
  *
  *
  * */
-void SetUpSensors();
-
-
-
-
 
 #endif /* OBSTACLESENSOR_H_ */
