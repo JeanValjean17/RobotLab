@@ -22,7 +22,7 @@ enum RobotMovement robotMovDirection = Mov_Stop;
 Bumpers bumperSensors;
 DistanceSensor distanceSensors;
 SemaphoreHandle_t xSemaphore;
-bool bothBumpersHit;
+bool directionBothDistanceDetection = false;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -84,8 +84,6 @@ int main(void)
 
     xSemaphore = xSemaphoreCreateMutex();
 
-    bothBumpersHit = false;
-
     /* Create the thread(s) */
     /* definition and creation of defaultTask */
 
@@ -134,7 +132,16 @@ static void Behaviour(void const * argument)
                     //Both sensors detecting
                     else if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue > 878)
                     {
-                        WriteMovement(Mov_Rot_Left, 1);
+                        if (directionBothDistanceDetection)
+                        {
+                            WriteMovement(Mov_Rot_Left, 1);
+                            directionBothDistanceDetection = true;
+                        }
+                        /*else
+                        {
+                            WriteMovement(Mov_Rot_Right, 1);
+                            directionBothDistanceDetection = true;
+                        }*/
                     }
                     else
                     {
@@ -165,7 +172,7 @@ static void Behaviour(void const * argument)
 static void MotorControl(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 350 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 700 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     MovementControl _motorControl;
