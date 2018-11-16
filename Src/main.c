@@ -84,6 +84,8 @@ int main(void)
 
     xSemaphore = xSemaphoreCreateMutex();
 
+
+
     /* Create the thread(s) */
     /* definition and creation of defaultTask */
 
@@ -135,13 +137,14 @@ static void Behaviour(void const * argument)
                         if (directionBothDistanceDetection)
                         {
                             WriteMovement(Mov_Rot_Left, 1);
-                            directionBothDistanceDetection = true;
+                            directionBothDistanceDetection = false;
                         }
-                        /*else
+                        else
                         {
                             WriteMovement(Mov_Rot_Right, 1);
                             directionBothDistanceDetection = true;
-                        }*/
+                        }
+
                     }
                     else
                     {
@@ -172,7 +175,7 @@ static void Behaviour(void const * argument)
 static void MotorControl(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 700 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     MovementControl _motorControl;
