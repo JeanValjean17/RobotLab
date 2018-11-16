@@ -21,6 +21,8 @@ int8_t mov_velocity = 0;
 enum RobotMovement robotMovDirection = Mov_Stop;
 Bumpers bumperSensors;
 DistanceSensor distanceSensors;
+SemaphoreHandle_t xSemaphore;
+
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
@@ -66,6 +68,8 @@ int main(void)
 
     SetUpSensors();
 
+    InitMotorControl();
+
     // Digital pins for target sensors
     digital_configure_pin(DD_PIN_PD14, DD_CFG_INPUT_NOPULL);
 
@@ -74,59 +78,23 @@ int main(void)
     ft_start_sampling(DD_PIN_PD14);
 
     //Here HIGH actually means low...
-    led_red(DD_LEVEL_HIGH);
-    led_green(DD_LEVEL_HIGH);
 
-    /* USER CODE BEGIN Init */
+    xSemaphore = NULL;
 
-    /* USER CODE END Init */
-
-    /* USER CODE BEGIN 2 */
-
-    /* USER CODE END 2 */
-
-    /* USER CODE BEGIN RTOS_MUTEX */
-    /* add mutexes, ... */
-    /* USER CODE END RTOS_MUTEX */
-
-    /* USER CODE BEGIN RTOS_SEMAPHORES */
-    /* add semaphores, ... */
-    /* USER CODE END RTOS_SEMAPHORES */
-
-    /* USER CODE BEGIN RTOS_TIMERS */
-    /* start timers, add new ones, ... */
-    /* USER CODE END RTOS_TIMERS */
+    xSemaphore = xSemaphoreCreateMutex();
 
     /* Create the thread(s) */
     /* definition and creation of defaultTask */
 
     xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 2, NULL);
-    xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
-    xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
-    // xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
-
-
-    //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-
-    /* USER CODE BEGIN RTOS_THREADS */
-    /* add threads, ... */
-    /* USER CODE END RTOS_THREADS */
-
-    /* USER CODE BEGIN RTOS_QUEUES */
-    /* add queues, ... */
-    /* USER CODE END RTOS_QUEUES */
+    //xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
+    //xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
+    //xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
 
     /* Start scheduler */
     //osKernelStart();
     vTaskStartScheduler();
-
-    /* We should never get here as control is now taken by the scheduler */
-
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
-
-    /* USER CODE END 3 */
 
 }
 
@@ -134,48 +102,70 @@ int main(void)
 static void Behaviour(void const * argument)
 {
 
-    /* USER CODE BEGIN 5 */
-
-    /* Infinite loop */
-    for (;;)
-    {
-        //sensorValue = adc_get_value(DA_ADC_CHANNEL0);
-        //led_green_toggle();
-        //traces("toogle led\r\n");   //print debug message
-        //sensorValue = adc_get_value(DA_ADC_CHANNEL0);
-        tracef("Behaviour \r\n");
-        vTaskDelay(20);       //delay the task for 20 ticks (1 ticks = 50 ms)
-    }
-    /* USER CODE END 5 */
-}
-
-/// -30,30,0 goes in straight line but third wheel lags. When third wheel is
-/// not zero it'll just take a turn.
-///
-/// @param argument
-static void MotorControl(void const * argument)
-{
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 250 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS;
+    xLastWakeTime = xTaskGetTickCount();
 
     while (1)
     {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        switch (robotMovDirection)
+        tracef("[Measured Distance]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.Right,
+                                distanceSensors.Left);
+        tracef("Behaviour \r\n");
+
+    }
+
+}
+
+static void MotorControl(void const * argument)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+    xLastWakeTime = xTaskGetTickCount();
+
+    MovementControl _motorControl;
+
+    while (1)
+    {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+        if (xSemaphore != NULL)
         {
-            case Mov_Straight:
-                mov_velocity = MoveStraight(mov_velocity);
-                break;
-            case Mov_Back:
-                mov_velocity = MoveBack(mov_velocity);
-                break;
-            case Mov_Rot_Left:
-                mov_velocity = RotateLeft(mov_velocity);
-                break;
-            case Mov_Rot_Right:
-                mov_velocity = RotateRight(mov_velocity);
-                break;
+            if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
+            {
+                _motorControl = ReadMovementToExecute();
+                led_red_toggle();
+                switch (_motorControl.direction)
+                {
+                    case Mov_Straight:
+                        mov_velocity = MoveStraight(mov_velocity);
+                        break;
+                    case Mov_Back:
+                        mov_velocity = MoveBack(mov_velocity);
+                        break;
+                    case Mov_Rot_Left:
+                        mov_velocity = RotateLeft(mov_velocity);
+                        break;
+                    case Mov_Rot_Right:
+                        mov_velocity = RotateRight(mov_velocity);
+                        break;
+                    case Mov_Stop:
+                    default:
+                        mov_velocity = StopMovement();
+                        break;
+                }
+                xSemaphoreGive(xSemaphore);
+            }
+            else
+            {
+                tracef("\r\n [Motor Control] Semaphore taken by another Task \r\n");
+            }
+
+        }
+        else
+        {
+            tracef("\r\n [Motor Control] Mutex NULL \r\n");
         }
 
         tracef("MotorControl \r\n");
@@ -222,14 +212,15 @@ static void IRSensorTest(void const * argument)
         tracef(" [Switch] Switch Level : %d \r\n", switchLevel);
         tracef("IRSensorTest \r\n");
 
-        vTaskDelay(50);
+        vTaskDelay(500);
     }
 }
 
 static void ObstacleAvoidanceSensors(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 50 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS;
+    xLastWakeTime = xTaskGetTickCount();
 
     while (1)
     {
@@ -239,12 +230,12 @@ static void ObstacleAvoidanceSensors(void const * argument)
 
         distanceSensors = ReadDistanceSensors();
 
-        tracef("[Bumpers] left Bumper:  %d, right Bumper:  %d", bumperSensors.Left, bumperSensors.Right);
+        //tracef("[Bumpers] left Bumper:  %d, right Bumper:  %d \r\n ", bumperSensors.Left, bumperSensors.Right);
 
-        tracef("[DistanceSensorReading] Sensor 1 Distance:  %d Sensor Value Left RAW : %d \r\n", 0,
+        tracef("Sensor Value Right RAW:   %d   Sensor Left %d \r\n", distanceSensors.RightRawValue,
                 distanceSensors.LeftRawValue);
 
-        tracef("Sensor Value Right RAW:   %d /r/n", distanceSensors.RightRawValue);
+
     }
 }
 

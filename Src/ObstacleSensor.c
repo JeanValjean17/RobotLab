@@ -10,7 +10,6 @@
 void SetUpSensors()
 {
 
-
     digital_configure_pin(DD_PIN_PC13, DD_CFG_INPUT_PULLUP);
 
     digital_configure_pin(DD_PIN_PA8, DD_CFG_INPUT_PULLUP);
@@ -31,13 +30,16 @@ DistanceSensor ReadDistanceSensors()
 {
     DistanceSensor _distanceSensors;
 
-    for (uint8_t i = 0; i < 10; i++)
-    {
-        _distanceSensors.LeftRawValue += adc_get_value(DA_ADC_CHANNEL0);
-        _distanceSensors.RightRawValue += adc_get_value(DA_ADC_CHANNEL2);
-    }
+    _distanceSensors.RightRawValue = adc_get_value(DA_ADC_CHANNEL0);
+    _distanceSensors.LeftRawValue = adc_get_value(DA_ADC_CHANNEL2);
 
-    //TODO: Add equation for distance. Re-calibration needed.
+    float floatValueRight = (1789 - _distanceSensors.RightRawValue) / 19;
+
+    float floatValueLeft = (1647 - _distanceSensors.LeftRawValue) / 19;
+
+    _distanceSensors.Right = (uint32_t) floatValueRight;
+    _distanceSensors.Left = (uint32_t) floatValueLeft;
+
 
     return _distanceSensors;
 }
