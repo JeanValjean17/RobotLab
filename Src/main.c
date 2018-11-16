@@ -89,7 +89,7 @@ int main(void)
     xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 2, NULL);
     //xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
-    //xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
+    xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
     //xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
 
     /* Start scheduler */
@@ -110,12 +110,32 @@ static void Behaviour(void const * argument)
     {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
+        if (xSemaphore != NULL)
+        {
+            if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
+            {
+
+                if (distanceSensors.LeftRawValue < 1200 && distanceSensors.LeftRawValue > 800
+                        && distanceSensors.RightRawValue < 800)
+                {
+                    tracef("Right \r\n");
+                    WriteMovement(Mov_Rot_Right, 0);
+                }
+                else
+                {
+                    tracef("Straight \r\n");
+                    WriteMovement(Mov_Straight, 0);
+
+                }
+
+                xSemaphoreGive(xSemaphore);
+            }
+
+        }
         tracef("[Measured Distance]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.Right,
-                                distanceSensors.Left);
-        tracef("Behaviour \r\n");
-
+                distanceSensors.Left);
+        //tracef("Behaviour \r\n");
     }
-
 }
 
 static void MotorControl(void const * argument)
@@ -139,6 +159,7 @@ static void MotorControl(void const * argument)
                 switch (_motorControl.direction)
                 {
                     case Mov_Straight:
+                        tracef("Moving Straight Motors \r\n");
                         mov_velocity = MoveStraight(mov_velocity);
                         break;
                     case Mov_Back:
@@ -148,6 +169,7 @@ static void MotorControl(void const * argument)
                         mov_velocity = RotateLeft(mov_velocity);
                         break;
                     case Mov_Rot_Right:
+                        tracef("Mov_Rot_Right Motors \r\n");
                         mov_velocity = RotateRight(mov_velocity);
                         break;
                     case Mov_Stop:
@@ -168,7 +190,7 @@ static void MotorControl(void const * argument)
             tracef("\r\n [Motor Control] Mutex NULL \r\n");
         }
 
-        tracef("MotorControl \r\n");
+        //tracef("MotorControl \r\n");
         //osDelay(250);
     }
 }
@@ -232,9 +254,8 @@ static void ObstacleAvoidanceSensors(void const * argument)
 
         //tracef("[Bumpers] left Bumper:  %d, right Bumper:  %d \r\n ", bumperSensors.Left, bumperSensors.Right);
 
-        tracef("Sensor Value Right RAW:   %d   Sensor Left %d \r\n", distanceSensors.RightRawValue,
-                distanceSensors.LeftRawValue);
-
+        //tracef("Sensor Value Right RAW:   %d   Sensor Left %d \r\n", distanceSensors.RightRawValue,
+        // distanceSensors.LeftRawValue);
 
     }
 }
