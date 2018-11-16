@@ -22,6 +22,7 @@ enum RobotMovement robotMovDirection = Mov_Stop;
 Bumpers bumperSensors;
 DistanceSensor distanceSensors;
 SemaphoreHandle_t xSemaphore;
+bool bothBumpersHit;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -83,12 +84,14 @@ int main(void)
 
     xSemaphore = xSemaphoreCreateMutex();
 
+    bothBumpersHit = false;
+
     /* Create the thread(s) */
     /* definition and creation of defaultTask */
 
     xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
-    xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 2, NULL);
-    //xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
+    xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 4, NULL);
+    xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
     //xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
 
@@ -114,26 +117,47 @@ static void Behaviour(void const * argument)
         {
             if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
             {
-
-                if (distanceSensors.LeftRawValue < 1200 && distanceSensors.LeftRawValue > 800
-                        && distanceSensors.RightRawValue < 800)
+                if (bumperSensors.Left && bumperSensors.Right)
                 {
-                    tracef("Right \r\n");
-                    WriteMovement(Mov_Rot_Right, 0);
+                    // Left sensor detecting
+                    if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue < 770)
+                    {
+                        tracef("Mov_Rot_Right");
+                        WriteMovement(Mov_Rot_Right, 1);
+                    }
+                    //Right sensor detecting
+                    else if (distanceSensors.RightRawValue > 878 && distanceSensors.LeftRawValue < 635)
+                    {
+                        tracef("Mov_Rot_Left");
+                        WriteMovement(Mov_Rot_Left, 1);
+                    }
+                    //Both sensors detecting
+                    else if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue > 878)
+                    {
+                        WriteMovement(Mov_Rot_Left, 1);
+                    }
+                    else
+                    {
+                        tracef("Mov_Straight");
+                        WriteMovement(Mov_Straight, 1);
+                    }
                 }
-                else
+                else if ((!bumperSensors.Left && !bumperSensors.Right) || (bumperSensors.Left && !bumperSensors.Right))
                 {
-                    tracef("Straight \r\n");
-                    WriteMovement(Mov_Straight, 0);
-
+                    WriteMovement(Mov_Back, 3);
+                }
+                else if (!bumperSensors.Left && bumperSensors.Right)
+                {
+                    WriteMovement(Mov_BackRight, 3);
                 }
 
                 xSemaphoreGive(xSemaphore);
             }
-
         }
-        tracef("[Measured Distance]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.Right,
-                distanceSensors.Left);
+        tracef("[Bumper sensors]: Right Sensor  %d   Left Sensor %d \r\n", bumperSensors.Right, bumperSensors.Left);
+
+        tracef("[Raw Value]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.RightRawValue,
+                distanceSensors.LeftRawValue);
         //tracef("Behaviour \r\n");
     }
 }
@@ -141,7 +165,7 @@ static void Behaviour(void const * argument)
 static void MotorControl(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 350 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     MovementControl _motorControl;
@@ -156,10 +180,10 @@ static void MotorControl(void const * argument)
             {
                 _motorControl = ReadMovementToExecute();
                 led_red_toggle();
+
                 switch (_motorControl.direction)
                 {
                     case Mov_Straight:
-                        tracef("Moving Straight Motors \r\n");
                         mov_velocity = MoveStraight(mov_velocity);
                         break;
                     case Mov_Back:
@@ -169,21 +193,23 @@ static void MotorControl(void const * argument)
                         mov_velocity = RotateLeft(mov_velocity);
                         break;
                     case Mov_Rot_Right:
-                        tracef("Mov_Rot_Right Motors \r\n");
                         mov_velocity = RotateRight(mov_velocity);
+                        break;
+                    case Mov_BackRight:
+                        mov_velocity = BackAndRight(mov_velocity);
                         break;
                     case Mov_Stop:
                     default:
                         mov_velocity = StopMovement();
                         break;
                 }
+
                 xSemaphoreGive(xSemaphore);
             }
             else
             {
                 tracef("\r\n [Motor Control] Semaphore taken by another Task \r\n");
             }
-
         }
         else
         {
@@ -200,8 +226,15 @@ static void IRSensorTest(void const * argument)
     uint32_t sensorValue = 0;
     float voltageRead = 0;
 
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 800 / portTICK_PERIOD_MS;
+    xLastWakeTime = xTaskGetTickCount();
+
     while (1)
     {
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
         uint8_t levelPin = 0;
         uint8_t levelPin2 = 0;
 
@@ -234,7 +267,6 @@ static void IRSensorTest(void const * argument)
         tracef(" [Switch] Switch Level : %d \r\n", switchLevel);
         tracef("IRSensorTest \r\n");
 
-        vTaskDelay(500);
     }
 }
 
