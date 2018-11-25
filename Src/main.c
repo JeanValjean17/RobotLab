@@ -84,8 +84,6 @@ int main(void)
 
     xSemaphore = xSemaphoreCreateMutex();
 
-
-
     /* Create the thread(s) */
     /* definition and creation of defaultTask */
 
@@ -134,16 +132,16 @@ static void Behaviour(void const * argument)
                     //Both sensors detecting
                     else if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue > 878)
                     {
-                        if (directionBothDistanceDetection)
-                        {
-                            WriteMovement(Mov_Rot_Left, 1);
-                            directionBothDistanceDetection = false;
-                        }
-                        else
-                        {
-                            WriteMovement(Mov_Rot_Right, 1);
-                            directionBothDistanceDetection = true;
-                        }
+                        //if (directionBothDistanceDetection)
+                        // {
+                        WriteMovement(Mov_Rot_Left, 1);
+                        // directionBothDistanceDetection = false;
+                        //}
+                        /*else
+                         {ROT_VEL
+                         WriteMovement(Mov_Rot_Right, 1);
+                         directionBothDistanceDetection = true;
+                         }*/
 
                     }
                     else

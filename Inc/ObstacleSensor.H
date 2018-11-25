@@ -14,7 +14,7 @@
 #include "adc.h"
 
 /**
- *
+ * Struct with bits for the switches/bumper sensors
  */
 typedef struct _bumpers
 {
@@ -23,7 +23,7 @@ typedef struct _bumpers
 } Bumpers;
 
 /**
- *
+ * Struct for storing distance sensors data
  */
 typedef struct _distanceSensors
 {
@@ -34,22 +34,14 @@ typedef struct _distanceSensors
 } DistanceSensor;
 
 
-/**
- * Configures pins for sensors
- */
+
 void SetUpSensors();
 
-/**
- * Reads the bumpers sensors
- * @return
- */
+
 Bumpers ReadBumperSensors();
 
 
-/**
- * Obtains the distance and the raw value from the sharp sensors
- * @return
- */
+
 DistanceSensor ReadDistanceSensors();
 
 

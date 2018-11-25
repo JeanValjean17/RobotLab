@@ -7,6 +7,9 @@
 
 #include "ObstacleSensor.H"
 
+/**
+ * Configures pins for sensors
+ */
 void SetUpSensors()
 {
 
@@ -15,6 +18,10 @@ void SetUpSensors()
     digital_configure_pin(DD_PIN_PA8, DD_CFG_INPUT_PULLUP);
 }
 
+/**
+ * Reads the bumper sensors
+ * @return Struct with the bumpers reading
+ */
 Bumpers ReadBumperSensors()
 {
     Bumpers _bumperSensors;
@@ -26,6 +33,10 @@ Bumpers ReadBumperSensors()
     return _bumperSensors;
 }
 
+/**
+ * Obtains the distance and the raw value from the sharp sensors
+ * @return struct with the raw and measured values.
+ */
 DistanceSensor ReadDistanceSensors()
 {
     DistanceSensor _distanceSensors;
