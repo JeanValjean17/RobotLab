@@ -10,41 +10,27 @@
 #include "motor.h"
 #include "Movement.h"
 #include "ObstacleSensor.H"
-/* USER CODE BEGIN Includes */
+#include "IRSensor.h"
 
-/* USER CODE END Includes */
 
-/* Private variables ---------------------------------------------------------*/
-
-osThreadId defaultTaskHandle;
+/* Global variables access by tasks ---------------------------------------------------------*/
 int8_t mov_velocity = 0;
 enum RobotMovement robotMovDirection = Mov_Stop;
 Bumpers bumperSensors;
 DistanceSensor distanceSensors;
 SemaphoreHandle_t xSemaphore;
 bool directionBothDistanceDetection = false;
+IRSensors irSensors;
 
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
 
-/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-
-/* USER CODE BEGIN PFP */
-/* Private function prototypes -----------------------------------------------*/
-
-/* USER CODE END PFP */
-
-/* USER CODE BEGIN 0 */
 static void Behaviour(void const * argument);
 static void ObstacleAvoidanceSensors(void const * argument);
-static void IRSensorTest(void const * argument);
+static void IRSensor(void const * argument);
 static void MotorControl(void const * argument);
-static void DefaultIdle(void const * argument);
-/* USER CODE END 0 */
+
 
 /**
  * @brief  The application entry point.
@@ -53,9 +39,6 @@ static void DefaultIdle(void const * argument);
  */
 int main(void)
 {
-    /* USER CODE BEGIN 1 */
-
-    /* USER CODE END 1 */
 
     /* MCU Configuration----------------------------------------------------------*/
 
@@ -78,31 +61,33 @@ int main(void)
 
     ft_start_sampling(DD_PIN_PD14);
 
-    //Here HIGH actually means low...
+    // Creating mutexes
 
     xSemaphore = NULL;
 
     xSemaphore = xSemaphoreCreateMutex();
 
     /* Create the thread(s) */
-    /* definition and creation of defaultTask */
 
     xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 4, NULL);
-    xTaskCreate((TaskFunction_t) IRSensorTest, "IRSensorReadings", 128, NULL, 1, NULL);
+    xTaskCreate((TaskFunction_t) IRSensor, "IRSensorReadings", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
-    //xTaskCreate((TaskFunction_t) DefaultIdle, "Idle", 64, NULL, 0, NULL);
 
     /* Start scheduler */
-    //osKernelStart();
     vTaskStartScheduler();
 
 }
 
-/* StartDefaultTask function */
+/**
+ * Task executing arpox. each 300 ms. This taks reads sensors information and writes accordingly behaviour to
+ * the motor task for the movement.
+ * @param argument
+ */
 static void Behaviour(void const * argument)
 {
 
+    // Frequency control so the task can execute each 300 ms.
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = 300 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
@@ -113,6 +98,7 @@ static void Behaviour(void const * argument)
 
         if (xSemaphore != NULL)
         {
+            // Asking if mutex is free, otherwise it won't execute until it is free.
             if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
             {
                 if (bumperSensors.Left && bumperSensors.Right)
@@ -158,7 +144,7 @@ static void Behaviour(void const * argument)
                 {
                     WriteMovement(Mov_BackRight, 3);
                 }
-
+                // Frees up mutex for other tasks to use it
                 xSemaphoreGive(xSemaphore);
             }
         }
@@ -166,10 +152,13 @@ static void Behaviour(void const * argument)
 
         tracef("[Raw Value]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.RightRawValue,
                 distanceSensors.LeftRawValue);
-        //tracef("Behaviour \r\n");
     }
 }
 
+/**
+ * Reads the movement to executed based on the results from the Behaviour task and sends it to the motors.
+ * @param argument
+ */
 static void MotorControl(void const * argument)
 {
     TickType_t xLastWakeTime;
@@ -223,13 +212,14 @@ static void MotorControl(void const * argument)
         {
             tracef("\r\n [Motor Control] Mutex NULL \r\n");
         }
-
-        //tracef("MotorControl \r\n");
-        //osDelay(250);
     }
 }
 
-static void IRSensorTest(void const * argument)
+/**
+ *
+ * @param argument
+ */
+static void IRSensor(void const * argument)
 {
     uint32_t sensorValue = 0;
     float voltageRead = 0;
@@ -243,41 +233,17 @@ static void IRSensorTest(void const * argument)
 
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        uint8_t levelPin = 0;
-        uint8_t levelPin2 = 0;
+        irSensors = ReadIRSensors();
 
-        /* tracef(" [Target Sensor] Pin Level : %d,  PIN 2   %d\r\n", levelPin,
-         levelPin2);*/
-
-        if (ft_is_sampling_finished())
-        {
-            uint16_t freq = ft_get_transform(DFT_FREQ100);
-            for (uint8_t i = 0; i < 100; i++)
-            {
-                levelPin += digital_get_pin(DD_PIN_PD14);
-                levelPin2 += digital_get_pin(DD_PIN_PC8);
-            }
-
-            levelPin /= 100;
-            levelPin2 /= 100;
-
-            tracef(" [Target Sensor] Pin Level : %d,  Freq Read: %d PIN 2   %d\r\n", levelPin, freq, levelPin2);
-
-            //TODO Filter maybe?
-            freq > 1500 ? led_red(DD_LEVEL_LOW) : led_red(DD_LEVEL_HIGH);
-
-            //led_red_toggle();
-            ft_start_sampling(DD_PIN_PD14);
-
-        }
-        uint8_t switchLevel = digital_get_pin(DD_PIN_PD15);
-
-        tracef(" [Switch] Switch Level : %d \r\n", switchLevel);
-        tracef("IRSensorTest \r\n");
+        tracef("IRSensor \r\n");
 
     }
 }
 
+/**
+ * Reads the obstacle sensors, namely; bumper and distance sensors.
+ * @param argument
+ */
 static void ObstacleAvoidanceSensors(void const * argument)
 {
     TickType_t xLastWakeTime;
@@ -296,16 +262,6 @@ static void ObstacleAvoidanceSensors(void const * argument)
 
         //tracef("Sensor Value Right RAW:   %d   Sensor Left %d \r\n", distanceSensors.RightRawValue,
         // distanceSensors.LeftRawValue);
-
-    }
-}
-
-static void DefaultIdle(void const * argument)
-{
-    while (1)
-    {
-        tracef("DefaultIdle \r\n");
-        vTaskDelay(100);
     }
 }
 
@@ -330,13 +286,5 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     /* USER CODE END Callback 1 */
 }
-
-/**
- * @}
- */
-
-/**
- * @}
- */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
