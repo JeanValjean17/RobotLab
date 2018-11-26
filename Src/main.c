@@ -20,6 +20,7 @@ DistanceSensor distanceSensors;
 SemaphoreHandle_t xSemaphore;
 bool directionBothDistanceDetection = false;
 IRSensors irSensors;
+uint8_t counterCorner = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
@@ -106,31 +107,29 @@ static void Behaviour(void const * argument)
                 if (bumperSensors.Left && bumperSensors.Right)
                 {
                     // Left sensor detecting
-                    if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue < 1300)
+                    if (counterCorner > 5)
+                    {
+                        WriteMovement(Mov_Back, 4);
+                    }
+                    else if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue < 1300)
                     {
                         tracef("\r\nMov_Rot_Right");
                         WriteMovement(Mov_Rot_Right, 1);
+                        counterCorner++;
                     }
                     //Right sensor detecting
                     else if (distanceSensors.RightRawValue > 1300 && distanceSensors.LeftRawValue < 1100)
                     {
                         tracef("\r\nMov_Rot_Left");
                         WriteMovement(Mov_Rot_Left, 1);
+                        counterCorner++;
                     }
                     //Both sensors detecting
                     else if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue > 1300)
                     {
                         tracef("\r\nBoth detecting MOVE LEFT");
-                        //if (directionBothDistanceDetection)
-                        // {
                         WriteMovement(Mov_Rot_Left, 1);
-                        // directionBothDistanceDetection = false;
-                        //}
-                        /*else
-                         {ROT_VEL
-                         WriteMovement(Mov_Rot_Right, 1);
-                         directionBothDistanceDetection = true;
-                         }*/
+                        counterCorner++;
                     }
                     else
                     {
@@ -148,16 +147,19 @@ static void Behaviour(void const * argument)
                         {
                             tracef("\r\nMov_Straight Nothing Detected\r\n");
                             WriteMovement(Mov_Straight, 1);
+                            counterCorner = 0;
                         }
                     }
                 }
                 else if ((!bumperSensors.Left && !bumperSensors.Right) || (bumperSensors.Left && !bumperSensors.Right))
                 {
                     WriteMovement(Mov_Back, 3);
+                    counterCorner = 0;
                 }
                 else if (!bumperSensors.Left && bumperSensors.Right)
                 {
                     WriteMovement(Mov_BackRight, 3);
+                    counterCorner = 0;
                 }
                 // Frees up mutex for other tasks to use it
                 xSemaphoreGive(xSemaphore);
