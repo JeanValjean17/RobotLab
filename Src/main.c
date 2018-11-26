@@ -21,6 +21,9 @@ SemaphoreHandle_t xSemaphore;
 bool directionBothDistanceDetection = false;
 IRSensors irSensors;
 uint8_t counterCorner = 0;
+uint8_t counterNarrow = 0;
+bool flagLeftDetection = false;
+bool flagRightDetection = false;
 
 /* Private function prototypes -----------------------------------------------*/
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
@@ -103,36 +106,65 @@ static void Behaviour(void const * argument)
             // Asking if mutex is free, otherwise it won't execute until it is free.
             if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
             {
+                if (counterCorner > 15)
+                {
+                    tracef("\r\n CORNER DETECTION  \r\n");
+                    WriteMovement(Mov_Straight, 9);
+                    counterCorner = 0;
+                    counterNarrow = 0;
+                }
+                if (counterNarrow > 10)
+                {
+                    tracef("\r\n NARROW ALLEY DETECTION  \r\n");
+                    WriteMovement(Mov_Straight, 9);
+                    counterCorner = 0;
+                    counterNarrow = 0;
+                }
                 // Bumpers not detecting. Logic is inverted
-                if (bumperSensors.Left && bumperSensors.Right)
+                else if (bumperSensors.Left && bumperSensors.Right)
                 {
                     // Left sensor detecting
-                    if (counterCorner > 5)
-                    {
-                        WriteMovement(Mov_Back, 4);
-                    }
-                    else if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue < 1300)
+                    if (distanceSensors.LeftRawValue > 1400 && distanceSensors.RightRawValue < 1600)
                     {
                         tracef("\r\nMov_Rot_Right");
                         WriteMovement(Mov_Rot_Right, 1);
-                        counterCorner++;
+
+                        if (flagRightDetection)
+                        {
+                            counterNarrow++;
+                            tracef("\r\n Was Right \r\n");
+                        }
+
+
+                        flagLeftDetection = true;
+
                     }
                     //Right sensor detecting
-                    else if (distanceSensors.RightRawValue > 1300 && distanceSensors.LeftRawValue < 1100)
+                    else if (distanceSensors.RightRawValue > 1600 && distanceSensors.LeftRawValue < 1400)
                     {
                         tracef("\r\nMov_Rot_Left");
                         WriteMovement(Mov_Rot_Left, 1);
-                        counterCorner++;
+
+                        if (flagLeftDetection)
+                        {
+                            counterNarrow++;
+                            tracef("\r\n Was Right \r\n");
+                        }
+
+                        flagRightDetection = true;
                     }
                     //Both sensors detecting
-                    else if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue > 1300)
+                    else if (distanceSensors.LeftRawValue > 1400 && distanceSensors.RightRawValue > 1600)
                     {
                         tracef("\r\nBoth detecting MOVE LEFT");
                         WriteMovement(Mov_Rot_Left, 1);
                         counterCorner++;
+                        counterNarrow = 0;
+                        flagLeftDetection = flagRightDetection = false;
                     }
                     else
                     {
+                        flagLeftDetection = flagRightDetection = false;
                         if (!irSensors.leftValue && irSensors.rightValue)
                         {
                             tracef("\r\n Move LEft Target LEFT \r\n");
@@ -147,19 +179,21 @@ static void Behaviour(void const * argument)
                         {
                             tracef("\r\nMov_Straight Nothing Detected\r\n");
                             WriteMovement(Mov_Straight, 1);
+                            counterNarrow = 0;
                             counterCorner = 0;
+
                         }
                     }
                 }
                 else if ((!bumperSensors.Left && !bumperSensors.Right) || (bumperSensors.Left && !bumperSensors.Right))
                 {
                     WriteMovement(Mov_Back, 3);
-                    counterCorner = 0;
+                    counterNarrow = 0;
                 }
                 else if (!bumperSensors.Left && bumperSensors.Right)
                 {
                     WriteMovement(Mov_BackRight, 3);
-                    counterCorner = 0;
+                    counterNarrow = 0;
                 }
                 // Frees up mutex for other tasks to use it
                 xSemaphoreGive(xSemaphore);
