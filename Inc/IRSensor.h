@@ -9,16 +9,19 @@
 #define IRSENSOR_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct _irSensors
 {
-    uint8_t Left;
-    uint8_t Right;
+    bool leftValue;
+    bool rightValue;
+    bool oldLeftValue;
+    bool oldRightValue;
+    bool leftDetection;
+    bool rightDetection;
     uint16_t freq;
 } IRSensors;
 
-
 IRSensors ReadIRSensors();
-
 
 #endif /* IRSENSOR_H_ */

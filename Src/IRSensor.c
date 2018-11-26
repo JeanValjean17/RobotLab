@@ -37,11 +37,9 @@ IRSensors ReadIRSensors()
         leftSensor /= 100;
         rightSensor /= 100;
 
-        irSensors.Left = leftSensor;
-        irSensors.Right = rightSensor;
         irSensors.freq = freq;
 
-        //tracef(" [Target Sensor] Pin Level : %d,  Freq Read: %d PIN 2   %d\r\n", levelPin, freq, levelPin2);
+        tracef(" [Target Sensor] Freq Read: %d \r\n", freq);
 
         //TODO Filter maybe?
         freq > 1500 ? led_red(DD_LEVEL_LOW) : led_red(DD_LEVEL_HIGH);

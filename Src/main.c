@@ -12,7 +12,6 @@
 #include "ObstacleSensor.H"
 #include "IRSensor.h"
 
-
 /* Global variables access by tasks ---------------------------------------------------------*/
 int8_t mov_velocity = 0;
 enum RobotMovement robotMovDirection = Mov_Stop;
@@ -22,15 +21,12 @@ SemaphoreHandle_t xSemaphore;
 bool directionBothDistanceDetection = false;
 IRSensors irSensors;
 
-
-
 /* Private function prototypes -----------------------------------------------*/
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 static void Behaviour(void const * argument);
 static void ObstacleAvoidanceSensors(void const * argument);
 static void IRSensor(void const * argument);
 static void MotorControl(void const * argument);
-
 
 /**
  * @brief  The application entry point.
@@ -49,6 +45,11 @@ int main(void)
     adc_init();
 
     motor_init();
+
+    irSensors.leftValue = 1;
+    irSensors.oldLeftValue = 1;
+    irSensors.rightValue = 1;
+    irSensors.oldRightValue = 1;
 
     SetUpSensors();
 
@@ -69,10 +70,10 @@ int main(void)
 
     /* Create the thread(s) */
 
-    xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 1, NULL);
-    xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 4, NULL);
+    xTaskCreate((TaskFunction_t) Behaviour, "Behaviour", 128, NULL, 2, NULL);
+    xTaskCreate((TaskFunction_t) ObstacleAvoidanceSensors, "SensorReading", 128, NULL, 1, NULL);
     xTaskCreate((TaskFunction_t) IRSensor, "IRSensorReadings", 128, NULL, 1, NULL);
-    xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 4, NULL);
+    xTaskCreate((TaskFunction_t) MotorControl, "MotorControl", 128, NULL, 3, NULL);
 
     /* Start scheduler */
     vTaskStartScheduler();
@@ -89,7 +90,7 @@ static void Behaviour(void const * argument)
 
     // Frequency control so the task can execute each 300 ms.
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 100 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     while (1)
@@ -105,20 +106,21 @@ static void Behaviour(void const * argument)
                 if (bumperSensors.Left && bumperSensors.Right)
                 {
                     // Left sensor detecting
-                    if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue < 770)
+                    if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue < 1300)
                     {
-                        tracef("Mov_Rot_Right");
+                        tracef("\r\nMov_Rot_Right");
                         WriteMovement(Mov_Rot_Right, 1);
                     }
                     //Right sensor detecting
-                    else if (distanceSensors.RightRawValue > 878 && distanceSensors.LeftRawValue < 635)
+                    else if (distanceSensors.RightRawValue > 1300 && distanceSensors.LeftRawValue < 1100)
                     {
-                        tracef("Mov_Rot_Left");
+                        tracef("\r\nMov_Rot_Left");
                         WriteMovement(Mov_Rot_Left, 1);
                     }
                     //Both sensors detecting
-                    else if (distanceSensors.LeftRawValue > 1000 && distanceSensors.RightRawValue > 878)
+                    else if (distanceSensors.LeftRawValue > 1100 && distanceSensors.RightRawValue > 1300)
                     {
+                        tracef("\r\nBoth detecting MOVE LEFT");
                         //if (directionBothDistanceDetection)
                         // {
                         WriteMovement(Mov_Rot_Left, 1);
@@ -132,8 +134,21 @@ static void Behaviour(void const * argument)
                     }
                     else
                     {
-                        tracef("Mov_Straight");
-                        WriteMovement(Mov_Straight, 1);
+                        if (!irSensors.leftValue && irSensors.rightValue)
+                        {
+                            tracef("\r\n Move LEft Target LEFT \r\n");
+                            WriteMovement(Mov_Rot_Left, 1);
+                        }
+                        else if (irSensors.leftValue && !irSensors.rightValue)
+                        {
+                            tracef("\r\n Move LEft Target RIGHT \r\n");
+                            WriteMovement(Mov_Rot_Right, 1);
+                        }
+                        else
+                        {
+                            tracef("\r\nMov_Straight Nothing Detected\r\n");
+                            WriteMovement(Mov_Straight, 1);
+                        }
                     }
                 }
                 else if ((!bumperSensors.Left && !bumperSensors.Right) || (bumperSensors.Left && !bumperSensors.Right))
@@ -148,12 +163,14 @@ static void Behaviour(void const * argument)
                 xSemaphoreGive(xSemaphore);
             }
         }
-        tracef("[Bumper sensors]: Right Sensor  %d   Left Sensor %d \r\n", bumperSensors.Right, bumperSensors.Left);
+        //tracef("[Bumper sensors]: Right Sensor  %d   Left Sensor %d \r\n", bumperSensors.Right, bumperSensors.Left);
 
-        tracef("[Raw Value]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.RightRawValue,
-                distanceSensors.LeftRawValue);
+        //tracef("[Raw Value]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.RightRawValue,
+        //distanceSensors.LeftRawValue);
 
-        tracef("[IR Sensor Freq Value]:  %d\r\n", irSensors.freq);
+        tracef("\r\n leftValue:  %d, rightValue: %d\r\n", irSensors.leftValue, irSensors.rightValue);
+
+        //tracef("\r\n[IR Sensor Freq Value]:  %d \r\n", irSensors.freq);
     }
 }
 
@@ -164,7 +181,7 @@ static void Behaviour(void const * argument)
 static void MotorControl(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 500 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 200 / portTICK_PERIOD_MS; //500
     xLastWakeTime = xTaskGetTickCount();
 
     MovementControl _motorControl;
@@ -226,7 +243,7 @@ static void IRSensor(void const * argument)
     float voltageRead = 0;
 
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 800 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 50 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     while (1)
@@ -234,9 +251,34 @@ static void IRSensor(void const * argument)
 
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        irSensors = ReadIRSensors();
+        bool leftSensor = 0;
+        bool rightSensor = 0;
 
-        tracef("IRSensor \r\n");
+        if (ft_is_sampling_finished())
+        {
+            // Freq only works in one pin. Right now set up to work on PD14 pin.
+
+            uint16_t freq = ft_get_transform(DFT_FREQ100);
+
+            leftSensor = digital_get_pin(DD_PIN_PD14);
+            rightSensor = digital_get_pin(DD_PIN_PC8);
+
+            /*tracef("\r\n digPinLeft:  %d, digPinRight:  %d oldValueLeft:  %d oldRightValue:  %d\r\n", leftSensor,
+             rightSensor, irSensors.oldLeftValue, irSensors.oldRightValue);*/
+
+            irSensors.leftValue = leftSensor;
+            irSensors.rightValue = rightSensor;
+            irSensors.freq = freq;
+
+            /*tracef(" [Target Sensor] Freq Read: %d Left Sensor %d Right Sensor %d \r\n", freq, irSensors.leftDetection,
+             irSensors.rightDetection);*/
+
+            //TODO Filter maybe?
+            freq > 1500 ? led_red(DD_LEVEL_LOW) : led_red(DD_LEVEL_HIGH);
+
+        }
+
+        tracef("\r\n IRSensor \r\n");
 
     }
 }
@@ -248,7 +290,7 @@ static void IRSensor(void const * argument)
 static void ObstacleAvoidanceSensors(void const * argument)
 {
     TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS;
+    const TickType_t xFrequency = 100 / portTICK_PERIOD_MS;
     xLastWakeTime = xTaskGetTickCount();
 
     while (1)
