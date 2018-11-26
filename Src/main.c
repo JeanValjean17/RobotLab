@@ -101,6 +101,7 @@ static void Behaviour(void const * argument)
             // Asking if mutex is free, otherwise it won't execute until it is free.
             if (xSemaphoreTake(xSemaphore, ( TickType_t ) 10 ) == pdTRUE)
             {
+                // Bumpers not detecting. Logic is inverted
                 if (bumperSensors.Left && bumperSensors.Right)
                 {
                     // Left sensor detecting
@@ -128,7 +129,6 @@ static void Behaviour(void const * argument)
                          WriteMovement(Mov_Rot_Right, 1);
                          directionBothDistanceDetection = true;
                          }*/
-
                     }
                     else
                     {
@@ -152,6 +152,8 @@ static void Behaviour(void const * argument)
 
         tracef("[Raw Value]: Right Sensor  %d   Left Sensor %d \r\n", distanceSensors.RightRawValue,
                 distanceSensors.LeftRawValue);
+
+        tracef("[IR Sensor Freq Value]:  %d\r\n", irSensors.freq);
     }
 }
 
@@ -200,7 +202,6 @@ static void MotorControl(void const * argument)
                         mov_velocity = StopMovement();
                         break;
                 }
-
                 xSemaphoreGive(xSemaphore);
             }
             else
